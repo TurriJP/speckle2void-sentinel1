@@ -15,7 +15,7 @@ import argparse
 #import os
 import scipy.io as sio
 import tensorflow as tf
-from keras.engine.training_utils import iter_sequence_infinite
+from tensorflow.python.keras.utils.data_utils import iter_sequence_infinite
 from DataGenerator import DataGenerator
 from DataWrapper import DataWrapper
 import keras.backend as K
@@ -118,7 +118,7 @@ class Speckle2V(object):
         
         self.gstep = tf.Variable(0, dtype=tf.int32, trainable=False, name='global_step')
         self.placeholder()
-        self.sess = tf.Session()
+        self.sess = tf.compat.v1.Session()
         
         self.loaded_weights = False
         
@@ -126,16 +126,16 @@ class Speckle2V(object):
     def placeholder(self):
         
         
-        self.X_noisy=tf.placeholder('float32',shape=[None,None,None,self.channels],name='X_noisy')
-        self.mask_holder=tf.placeholder('float32',shape=[None,None,None,self.channels],name='mask')
-        self.shift=tf.placeholder('int32',shape=[],name='shift')
+        self.X_noisy=tf.compat.v1.placeholder('float32',shape=[None,None,None,self.channels],name='X_noisy')
+        self.mask_holder=tf.compat.v1.placeholder('float32',shape=[None,None,None,self.channels],name='mask')
+        self.shift=tf.compat.v1.placeholder('int32',shape=[],name='shift')
         
-        self.L_holder = tf.placeholder('float32', shape=[] ,name='L')
-        self.is_train = tf.placeholder(tf.bool, shape=[])
+        self.L_holder = tf.compat.v1.placeholder('float32', shape=[] ,name='L')
+        self.is_train = tf.compat.v1.placeholder(tf.bool, shape=[])
         
         
     def get_data(self):
-        with tf.name_scope('data'):
+        with tf.compat.v1.name_scope('data'):
             
             # Training Data Preparation
 
@@ -154,7 +154,7 @@ class Speckle2V(object):
             #####TRAINING
             #Compute mask for training images to exclude them in the loss computation
             indexes = np.where(X_train_noisy > self.clip)
-            self.mask_train = np.ones_like(X_train_noisy,dtype=np.bool)
+            self.mask_train = np.ones_like(X_train_noisy,dtype=bool)
             self.mask_train[indexes] = False
             
             print('Clipping...')
@@ -184,7 +184,7 @@ class Speckle2V(object):
             self.images_test = images_test
             #Compute mask for test images to be able to place the point targets back into the denoised estimate
             indexes = np.where(self.images_test > self.clip)
-            self.mask_test = np.ones_like(self.images_test,dtype=np.bool)
+            self.mask_test = np.ones_like(self.images_test,dtype=bool)
             self.mask_test[indexes] = False
     
             
@@ -206,7 +206,7 @@ class Speckle2V(object):
             x1 = x1[:,:-pad_size,:]
             return x1
             
-        with tf.variable_scope(scope_name, reuse=tf.AUTO_REUSE) as scope:
+        with tf.compat.v1.variable_scope(scope_name, reuse=tf.compat.v1.AUTO_REUSE) as scope:
             
             F=64
             
@@ -218,7 +218,7 @@ class Speckle2V(object):
                 
             
                 if j in [0,2]:
-                    with tf.variable_scope('nety', reuse=tf.AUTO_REUSE) as scope:
+                    with tf.compat.v1.variable_scope('nety', reuse=tf.compat.v1.AUTO_REUSE) as scope:
                         sp = [[0,0], [1,0], [0,0], [0,0]]
                         x1 = Conv2D(tf.pad(x1, sp, mode='CONSTANT'), [3,3,self.channels,F], [1,1,1,1], 'SAME', scope_name='conv_0')
                         x1 = tf.nn.leaky_relu(x1)
@@ -228,7 +228,7 @@ class Speckle2V(object):
                         # 15 layers,Conv+BN+relu
                         for i in range(15):
                             x1 = Conv2D(tf.pad(x1, sp, mode='CONSTANT'), [3,3,F,F], [1,1,1,1], 'SAME', scope_name='conv_{0}'.format(i+1))
-                            x1 = tf.layers.batch_normalization(x1, axis=-1,training=self.is_train,name='bn_{0}'.format(i+1))
+                            x1 = tf.compat.v1.layers.batch_normalization(x1, axis=-1,training=self.is_train,name='bn_{0}'.format(i+1))
                             x1 = tf.nn.leaky_relu(x1)
                             x1 = x1[:,:-1,:]
                          
@@ -250,7 +250,7 @@ class Speckle2V(object):
                         x1 = tf.image.rot90(x1,k=4-j,name=None)
                         intermediates.append(x1)
                 else:
-                    with tf.variable_scope('netx', reuse=tf.AUTO_REUSE) as scope:
+                    with tf.compat.v1.variable_scope('netx', reuse=tf.compat.v1.AUTO_REUSE) as scope:
                         sp = [[0,0], [1,0], [0,0], [0,0]]
                         x1 = Conv2D(tf.pad(x1, sp, mode='CONSTANT'), [3,3,self.channels,F], [1,1,1,1], 'SAME', scope_name='conv_0')
                         x1 = tf.nn.leaky_relu(x1)
@@ -260,7 +260,7 @@ class Speckle2V(object):
                         # 15 layers, Conv+BN+relu
                         for i in range(15):
                             x1 = Conv2D(tf.pad(x1, sp, mode='CONSTANT'), [3,3,F,F], [1,1,1,1], 'SAME', scope_name='conv_{0}'.format(i+1))
-                            x1 = tf.layers.batch_normalization(x1, axis=-1,training=self.is_train,name='bn_{0}'.format(i+1))
+                            x1 = tf.compat.v1.layers.batch_normalization(x1, axis=-1,training=self.is_train,name='bn_{0}'.format(i+1))
                             x1 = tf.nn.leaky_relu(x1)
                             x1 = x1[:,:-1,:]
                          
@@ -315,12 +315,12 @@ class Speckle2V(object):
         L_replicated = tf.broadcast_to(self.L_holder, [sh[0],sh[1],sh[2],1], name='L_replicated')
         alpha_L = tf.concat([self.alpha,L_replicated],axis=-1) 
         
-        log_beta = tf.log((self.beta) + 1e-19)
+        log_beta = tf.math.log((self.beta) + 1e-19)
         alpha_log_beta_complete = (- self.alpha * log_beta)
-        alpha_log_beta_noisy_complete = (self.L_holder + self.alpha) * tf.log(self.beta + (self.L_holder * self.X_noisy) + 1e-19)
+        alpha_log_beta_noisy_complete = (self.L_holder + self.alpha) * tf.math.log(self.beta + (self.L_holder * self.X_noisy) + 1e-19)
         beta_func_complete = tf.expand_dims(tf.math.lbeta(alpha_L), axis=-1)
         
-        log_p_y =   (self.L_holder * tf.log(self.L_holder + 1e-19))                     + ((self.L_holder-1) * tf.log(self.X_noisy+1e-19))                     - (alpha_log_beta_complete)                     - (alpha_log_beta_noisy_complete)                     - beta_func_complete
+        log_p_y =   (self.L_holder * tf.math.log(self.L_holder + 1e-19))                     + ((self.L_holder-1) * tf.math.log(self.X_noisy+1e-19))                     - (alpha_log_beta_complete)                     - (alpha_log_beta_noisy_complete)                     - beta_func_complete
         
         self.log_p_y_1 = log_p_y + 0.0
         #Apply mask to exclude the pixels with the median from the loss computation
@@ -349,11 +349,11 @@ class Speckle2V(object):
         define optimization algorithm
         '''
         
-        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+        update_ops = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.UPDATE_OPS)
         #print("Batch norm variables {}".format([v.name for v in update_ops]))
         with tf.control_dependencies(update_ops):
-            with tf.name_scope('optimizer') as scope:
-                self.opt=tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss, global_step=self.gstep)
+            with tf.compat.v1.name_scope('optimizer') as scope:
+                self.opt=tf.compat.v1.train.AdamOptimizer(self.learning_rate).minimize(self.loss, global_step=self.gstep)
     
         
     
@@ -363,7 +363,7 @@ class Speckle2V(object):
         The equation is:
         PSNR = 20 * log10(MAX_I) - 10 * log10(MSE)
         """
-        return -10.0 * tf.log(tf.reduce_mean(tf.square(y_pred - y_true))) / tf.log(10.0) 
+        return -10.0 * tf.math.log(tf.reduce_mean(tf.square(y_pred - y_true))) / tf.math.log(10.0) 
      
         
     def ENL(self, y_pred):
@@ -378,41 +378,41 @@ class Speckle2V(object):
         '''
         Create summaries to write on TensorBoard
         '''
-        with tf.name_scope('performance') as scope:
+        with tf.compat.v1.name_scope('performance') as scope:
             ################# summaries ###################
-            tf.summary.scalar('loss', self.loss, collections=['loss'])
-            tf.summary.scalar('beta_func', self.beta_func, collections=['portions_loss'])
-            tf.summary.scalar('alpha_log_beta', self.alpha_log_beta, collections=['portions_loss'])
-            tf.summary.scalar('alpha_log_beta_noisy', self.alpha_log_beta_noisy, collections=['portions_loss'])
-            tf.summary.scalar('difference', self.difference, collections=['portions_loss'])
-            tf.summary.scalar('total_var', self.total_variation, collections=['portions_loss'])
+            tf.compat.v1.summary.scalar('loss', self.loss, collections=['loss'])
+            tf.compat.v1.summary.scalar('beta_func', self.beta_func, collections=['portions_loss'])
+            tf.compat.v1.summary.scalar('alpha_log_beta', self.alpha_log_beta, collections=['portions_loss'])
+            tf.compat.v1.summary.scalar('alpha_log_beta_noisy', self.alpha_log_beta_noisy, collections=['portions_loss'])
+            tf.compat.v1.summary.scalar('difference', self.difference, collections=['portions_loss'])
+            tf.compat.v1.summary.scalar('total_var', self.total_variation, collections=['portions_loss'])
             
             #no reference metric
-            tf.summary.scalar('ENL', self.enl, collections=['metrics'])
+            tf.compat.v1.summary.scalar('ENL', self.enl, collections=['metrics'])
             
-        self.summary_loss=tf.summary.merge_all(key='loss')
-        self.summary_portions_loss=tf.summary.merge_all(key='portions_loss')
-        self.summary_metrics=tf.summary.merge_all(key='metrics')
+        self.summary_loss=tf.compat.v1.summary.merge_all(key='loss')
+        self.summary_portions_loss=tf.compat.v1.summary.merge_all(key='portions_loss')
+        self.summary_metrics=tf.compat.v1.summary.merge_all(key='metrics')
         
         
         #Images on tensorboard
-        with tf.name_scope('images') as scope:
-            tf.summary.image('images_denoised', self.X_posterior_clip, 3,collections=['images'])
-            tf.summary.image('images_noisy', tf.clip_by_value((self.X_noisy * self.norm), 0, 50000)  , 3,collections=['images'])
-            tf.summary.image('images_test', self.X_posterior_clip, 2,collections=['images_test'])
-            tf.summary.image('images_noisy_test', tf.clip_by_value((self.X_noisy * self.norm), 0, 50000), 2,collections=['images_test'])
+        with tf.compat.v1.name_scope('images') as scope:
+            tf.compat.v1.summary.image('images_denoised', self.X_posterior_clip, 3,collections=['images'])
+            tf.compat.v1.summary.image('images_noisy', tf.clip_by_value((self.X_noisy * self.norm), 0, 50000)  , 3,collections=['images'])
+            tf.compat.v1.summary.image('images_test', self.X_posterior_clip, 2,collections=['images_test'])
+            tf.compat.v1.summary.image('images_noisy_test', tf.clip_by_value((self.X_noisy * self.norm), 0, 50000), 2,collections=['images_test'])
         
         
         ## Merge all summaries related to images collection
-        self.tf_images_summaries = tf.summary.merge_all(key='images') 
-        self.tf_images_test_summary = tf.summary.merge_all(key='images_test')
+        self.tf_images_summaries = tf.compat.v1.summary.merge_all(key='images') 
+        self.tf_images_test_summary = tf.compat.v1.summary.merge_all(key='images_test')
         
         ##Plot hist of prior and posterior images
-        tf.summary.histogram('posterior_x_hist', tf.reshape(self.X_posterior,[-1]),collections=['parameters'])
-        tf.summary.histogram('noisy_x_hist', tf.reshape(self.X_noisy,[-1]),collections=['parameters'])
+        tf.compat.v1.summary.histogram('posterior_x_hist', tf.reshape(self.X_posterior,[-1]),collections=['parameters'])
+        tf.compat.v1.summary.histogram('noisy_x_hist', tf.reshape(self.X_noisy,[-1]),collections=['parameters'])
         
         ## Merge all parameter histogram summaries together
-        self.tf_param_summaries = tf.summary.merge_all(key='parameters')
+        self.tf_param_summaries = tf.compat.v1.summary.merge_all(key='parameters')
         
         
     def train_one_epoch(self,saver,train_writer,test_writer,epoch,step):
@@ -515,8 +515,8 @@ class Speckle2V(object):
         safe_mkdir('checkpoints/'+self.checkpoint_dir)
         #To plot two different curves on the same graph we need two different writers that write the
         #same group of summaries.
-        train_writer = tf.summary.FileWriter('./graphs/'+self.checkpoint_dir + '/train', tf.get_default_graph())
-        test_writer = tf.summary.FileWriter('./graphs/'+self.checkpoint_dir + '/test',tf.get_default_graph())
+        train_writer = tf.compat.v1.summary.FileWriter('./graphs/'+self.checkpoint_dir + '/train', tf.compat.v1.get_default_graph())
+        test_writer = tf.compat.v1.summary.FileWriter('./graphs/'+self.checkpoint_dir + '/test',tf.compat.v1.get_default_graph())
         #self.sess.run(tf.global_variables_initializer())
         #
         #
@@ -544,7 +544,7 @@ class Speckle2V(object):
         '''
         Compute no-reference metric: enl
         '''
-        with tf.name_scope('ENL'):
+        with tf.compat.v1.name_scope('ENL'):
             self.enl=self.ENL(self.X_posterior)   
         
 
@@ -553,8 +553,8 @@ class Speckle2V(object):
     def test(self,file_checkpoint=None):
         #return                      
         if not self.loaded_weights:
-            self.sess.run(tf.global_variables_initializer())
-            saver = tf.train.Saver(max_to_keep=40)
+            self.sess.run(tf.compat.v1.global_variables_initializer())
+            saver = tf.compat.v1.train.Saver(max_to_keep=40)
             if file_checkpoint:
                 if os.path.isfile('{0}.index'.format(file_checkpoint)):
                     print('Taking the specified checkpoint...')
@@ -564,8 +564,8 @@ class Speckle2V(object):
             else:
                 print('Taking the last checkpoint...')
                 #Restore the session from checkpoint
-                self.sess.run(tf.global_variables_initializer())
-                saver = tf.train.Saver()
+                self.sess.run(tf.compat.v1.global_variables_initializer())
+                saver = tf.compat.v1.train.Saver()
                 ckpt = tf.train.get_checkpoint_state(os.path.dirname('checkpoints/'+self.checkpoint_dir+'/checkpoint'))
                 if ckpt and ckpt.model_checkpoint_path:
                     saver.restore(self.sess, ckpt.model_checkpoint_path)
@@ -618,7 +618,7 @@ class Speckle2V(object):
         '''
         
         indexes = np.where(img > self.clip)
-        mask = np.ones_like(img,dtype=np.bool)
+        mask = np.ones_like(img,dtype=bool)
         mask[indexes] = False
     
         
@@ -642,10 +642,10 @@ class Speckle2V(object):
         return clean_img
     
     def load_weights(self):
-        saver = tf.train.Saver(max_to_keep=None)
+        saver = tf.compat.v1.train.Saver(max_to_keep=None)
         #LOADING froms checkpoint
         if not self.loaded_weights:
-            self.sess.run(tf.global_variables_initializer())
+            self.sess.run(tf.compat.v1.global_variables_initializer())
             
             if self.file_checkpoint:
                 if os.path.isfile('{0}.index'.format(self.file_checkpoint)):
